@@ -18,21 +18,22 @@ library(tidyr)
 # setwd("path/to/your/directory") # Uncomment and modify as needed
 
 # Read input data
-input_file <- "250410_ROT21_Inputs_montecarlo_simulations_d2Hprec_final_model.xlsx"
+#You may adjust the fGR variable. Here, we use R.A_fGR, which is available on the "R.A_fGR" spreadsheet of the ROT21_Inputs_MonteCarlo_simulation_d2Hprc.xlsx file. 
+input_file <- "ROT21_Inputs_MonteCarlo_simulation_d2Hprc.xlsx"
 if (!file.exists(input_file)) {
   stop("Input file not found: ", input_file)
 }
 data <- read_excel(input_file)
 
 # Verify required columns
-required_cols <- c("Age_BP_ka", "d2H_C29", "f_GR")
+required_cols <- c("Age_BP_ka", "d2H_C29", "R.A_f_GR")
 if (!all(required_cols %in% colnames(data))) {
   stop("Missing required columns in input data: ", paste(required_cols, collapse = ", "))
 }
 
 # Validate f_GR values (must be between 0 and 1)
-if (any(data$f_GR < 0 | data$f_GR > 1, na.rm = TRUE)) {
-  stop("f_GR values must be between 0 and 1")
+if (any(data$R.A_f_GR < 0 | data$R.A_f_GR > 1, na.rm = TRUE)) {
+  stop("R.A_f_GR values must be between 0 and 1")
 }
 
 # Define fractionation values and uncertainties (See Santos et al., 025 and references therein)
@@ -54,7 +55,7 @@ for (i in 1:nrow(data)) {
   # Extract sample data
   age <- data$Age_BP_ka[i]
   d2H_C29 <- data$d2H_C29[i]
-  f_grasses_RA <- data$f_GR[i]
+  f_grasses_RA <- data$R.A_f_GR[i]
   
   # Skip if any required value is NA
   if (any(is.na(c(d2H_C29, f_grasses_RA)))) {
