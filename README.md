@@ -57,7 +57,7 @@ Notes
 
 Input Data: The input Excel file is not included in this repository due to potential data sensitivity. Contact the corresponding author (r.n.santos@unibas.ch) for access or check the manuscript’s Supporting Information for a DOI link.
 Reproducibility: The script uses set.seed(12345) for consistent results.
-Reference: Fractionation values are based on Hepp et al. (2020). See manuscript for details.
+Reference: Fractionation values, please see the manuscript for references and details.
 
 Citation
 Please cite the associated manuscript: Santos, R. N., et al. (202x). Holocene Hydroclimate Reconstruction in Europe: Overcoming Vegetation Bias in Plant Wax Hydrogen Isotopes. Geophysical Research Letters (in submission).
