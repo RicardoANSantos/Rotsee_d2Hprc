@@ -9,9 +9,9 @@ ggplot2 (for plotting)
 readxl (for reading Excel files)
 writexl (for writing Excel files)
 dplyr (for data manipulation)
-tidyr (for data tidying)Install packages using:
+tidyr (for data tidying)
 
-
+Install packages using:
 install.packages(c("ggplot2", "readxl", "writexl", "dplyr", "tidyr"))
 
 Files
