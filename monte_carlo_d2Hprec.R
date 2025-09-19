@@ -25,7 +25,7 @@ if (!file.exists(input_file)) {
 data <- read_excel(input_file)
 
 # Verify required columns
-required_cols <- c("Age", "d2H_C29", "f_GR")
+required_cols <- c("Age_BP_ka", "d2H_C29", "f_GR")
 if (!all(required_cols %in% colnames(data))) {
   stop("Missing required columns in input data: ", paste(required_cols, collapse = ", "))
 }
@@ -52,7 +52,7 @@ skipped_rows <- 0  # Track skipped rows
 # Perform Monte Carlo simulations for each sample
 for (i in 1:nrow(data)) {
   # Extract sample data
-  age <- data$Age[i]
+  age <- data$Age_BP_ka[i]
   d2H_C29 <- data$d2H_C29[i]
   f_grasses_RA <- data$f_GR[i]
   
