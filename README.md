@@ -1,5 +1,6 @@
 R script for Monte Carlo simulations to reconstruct δ2H precipitation (δ2Hprc) values from plant wax δ2H (n-C29 alkane) in the Rotsee sediment core (ROT21), as described in the manuscript "Holocene Hydroclimate Reconstruction in Europe: Overcoming Vegetation Bias in Plant Wax Hydrogen Isotopes" (Santos et al., 2025, submitted to Geophysical Research Letters).
 This script performs vegetation-corrected δ2Hprc reconstructions using an n-alkane relative abundance (R.A) index and hydrogen fractionation factors, computes 68% and 95% confidence intervals, and generates a plot with LOESS smoothing.
+
 Dependencies
 
 R: Version 4.4.1 or higher
@@ -35,7 +36,7 @@ Optionally, set the working directory in the script by uncommenting and modifyin
 
 
 Run the Script:
-source("monte_carlo_d2Hprec.R")
+source("monte_carlo_d2Hprc.R")
 
 The script will:
 
