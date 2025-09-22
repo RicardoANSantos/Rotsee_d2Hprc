@@ -59,6 +59,6 @@ Reproducibility: The script uses set.seed(12345) for consistent results.
 Reference: Hydrogen fractionation values from Central Europe, please see the manuscript for references and details.
 
 Citation
-Please cite the associated manuscript: Santos, R. N., et al. (2025). Holocene Hydroclimate Reconstruction in Europe: Overcoming Vegetation Bias in Plant Wax Hydrogen Isotopes. Geophysical Research Letters (in submission).
+Please cite the associated manuscript: Santos, R. N., et al. (2025). Central Europe hydroclimate since the Younger Dryas from vegetation-corrected sedimentary plant wax δ2H values. Geophysical Research Letters (in submission).
 Contact
 For questions, contact R. N. Santos (r.n.santos@unibas.ch) or S. N. Ladd (n.ladd@unibas.ch).
