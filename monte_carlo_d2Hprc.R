@@ -93,11 +93,11 @@ if (skipped_rows > 0) {
 final_results <- do.call(rbind, simulations_list)
 
 # Export raw simulation results
-output_sim <- "d2H_precipitation_simulations.xlsx"
+output_sim <- "d2H_precipitation_simulations.csv"
 if (file.exists(output_sim)) {
   warning("Output file already exists: ", output_sim, ". Skipping write.")
 } else {
-  write_xlsx(final_results, output_sim)
+  write.csv(final_results, output_sim, row.names = FALSE)
 }
 
 # Compute confidence intervals
