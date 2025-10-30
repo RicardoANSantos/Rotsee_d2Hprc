@@ -141,6 +141,9 @@ p <- ggplot(results_ci, aes(x = Age)) +
   ) +
   theme_minimal(base_size = 14)
 
+# Display plot at the end of the script
+print(p)
+
 # Save plots
 ggsave("d2H_precip_plot_with_CI_and_LOESS.png", plot = p, width = 10, height = 6, dpi = 300)
 ggsave("d2H_precip_plot_with_CI_and_LOESS.pdf", plot = p, width = 10, height = 6)
