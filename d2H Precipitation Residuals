@@ -1,0 +1,112 @@
+# ==============================================================================
+# Monte Carlo Simulation for Estimating δ2H Precipitation Residuals
+# ==============================================================================
+# Purpose:
+# This script performs a Monte Carlo simulation to compute residuals in 
+# reconstructed δ2H precipitation values after correcting for temperature and 
+# ice volume/sea level effects. It propagates uncertainties assuming normal 
+# distributions for all parameters.
+#
+# Data Requirements:
+# - Excel sheet with columns:
+#   - Age_BP: Calibrated ages (ka BP).
+#   - d2Hprc_veg.corr_Mean_RA: Mean reconstructed δ2H (vegetation-corrected). Obtained using RA-based approach; see "monte_carlo_d2Hprc.R" for details.
+#   - d2Hprc_veg.corr_CI_68_low_RA & _high_RA: 68% CI bounds for δ2H. See "monte_carlo_d2Hprc.R" for details.
+#   - y_interpol_mean_Temp_Heiri_2015: Mean past temperature (°C). Linearly interpolated to align with the ages of the 'd2Hprc_veg.corr_Mean_RA' datapoints for temporal consistency.
+#   - y_interpol_mean_delta_SL: Mean sea level change (m). From Lambeck et al. (2014); linearly interpolated to align with the ages of the 'd2Hprc_veg.corr_Mean_RA' datapoints for temporal consistency.
+#   - y_interpol_BP_sd_delta_SL: SD for sea level change. From Lambeck et al. (2014).
+# - If per-sample SD for temperature is available, add a column and update sd_Tpast in the mutate step.
+# - Ensure data is sorted by Age_BP if needed for further analysis.
+#
+# Caveats and Assumptions:
+# - Assumes all uncertainties follow normal distributions; if not, replace rnorm with appropriate distributions (e.g., rtruncnorm for bounds).
+# - Linear corrections for temperature and ice; nonlinear effects may require modifications.
+# - Fixed sd_Tpast=2°C; replace with per-sample values for accuracy.
+# - High n_iter (10k) ensures precise quantiles but increases runtime for large datasets.
+# - Assumes symmetric CI from normal dist for SD derivation; if asymmetric, use alternatives (e.g., bootstraps).
+# - No handling of correlated uncertainties (e.g., between temp and δ2H); use multivariate normals if needed.
+# - Site-specific parameters (e.g., for Rotsee); validate/update based on literature/site. See chapter 2.3.6 of the manuscript for details.
+# - Overwrites output file; use version control or backups.
+#
+# Please check chapter 2.3.6 in the accompanying manuscript (under review) for in-depth discussion of these values and their site-specific application.
+#
+# Parameter Sources:
+# - mean_d2H_modern & sd_d2H_modern: From OIPC3.1[](https://wateriso.utah.edu/waterisotopes/pages/data_access/oipc.html).
+# - mean_temp_coeff & sd_temp_coeff: Temperature coefficient (positive for enrichment with warming); see manuscript.
+# - ice_coeff: Ice volume/sea level coefficient; from Rozanski et al. (1982).
+# - T_modern: Modern temperature from the study site.
+#
+# Usage:
+# 1. Set input_file and output_file below.
+# 2. Adjust parameters as needed for your site/record.
+# 3. Run the script.
+#
+# Dependencies: Install via install.packages(c("readxl", "dplyr", "openxlsx"))
+# ==============================================================================
+#
+#
+
+# Load required packages
+library(readxl)
+library(dplyr)
+library(openxlsx)
+
+# ---- User-Configurable Paths and Files ----
+input_file <- "your_input_data.xlsx"  # Replace with your Excel file path (e.g., "data.xlsx")
+input_sheet <- "Sheet1"               # Sheet name in Excel
+output_file <- "MonteCarlo_d2H_prc_Residuals.xlsx"  # Output Excel file
+
+# ---- Parameters ----
+mean_d2H_modern <- -66    # ‰, mean δ2H of modern precipitation
+sd_d2H_modern <- 2        # ‰, uncertainty in modern mean
+mean_temp_coeff <- 4.8    # ‰/°C, temperature coefficient
+sd_temp_coeff <- 0.5      # ‰/°C, uncertainty in coefficient
+ice_coeff <- -0.064       # ‰/m, ice volume/sea level coefficient
+T_modern <- 10            # °C, modern reference temperature
+n_iter <- 10000           # Monte Carlo iterations
+
+# ---- Load and Prepare Data ----
+df <- read_excel(input_file, sheet = input_sheet)
+
+df <- df %>%
+  mutate(
+    sd_d2Hprc_veg_corr = (d2Hprc_veg.corr_CI_68_high_RA - d2Hprc_veg.corr_CI_68_low_RA) / (2 * qnorm(0.84)),
+    mean_d2Hprc_veg_corr = d2Hprc_veg.corr_Mean_RA,
+    mean_Tpast = y_interpol_mean_Temp_Heiri_2015,
+    mean_delta_SL = y_interpol_mean_delta_SL,
+    sd_delta_SL = y_interpol_BP_sd_delta_SL,
+    sd_Tpast = 2
+  )
+
+# ---- Monte Carlo Simulation ----
+set.seed(123)  # For reproducibility
+
+results <- lapply(1:nrow(df), function(i) {
+  d2Hprc <- rnorm(n_iter, mean = df$mean_d2Hprc_veg_corr[i], sd = df$sd_d2Hprc_veg_corr[i])
+  d2H_modern <- rnorm(n_iter, mean = mean_d2H_modern, sd = sd_d2H_modern)
+  temp_coeff <- rnorm(n_iter, mean = mean_temp_coeff, sd = sd_temp_coeff)
+  Tpast <- rnorm(n_iter, mean = df$mean_Tpast[i], sd = df$sd_Tpast[i])
+  deltaSL <- rnorm(n_iter, mean = df$mean_delta_SL[i], sd = df$sd_delta_SL[i])
+  
+  d2H_temp <- d2H_modern + temp_coeff * (Tpast - T_modern)
+  d2H_temp_ice <- d2H_temp + ice_coeff * deltaSL
+  
+  d2H_residual <- d2Hprc - d2H_temp_ice
+  
+  data.frame(
+    Age_BP = df$Age_BP[i],
+    d2H_mean = mean(d2H_residual),
+    d2H_sd = sd(d2H_residual),
+    d2H_p025 = quantile(d2H_residual, 0.025),
+    d2H_p16 = quantile(d2H_residual, 0.16),
+    d2H_p50 = quantile(d2H_residual, 0.50),
+    d2H_p84 = quantile(d2H_residual, 0.84),
+    d2H_p975 = quantile(d2H_residual, 0.975)
+  )
+})
+
+results_df <- bind_rows(results)
+
+# ---- Export Results ----
+write.xlsx(results_df, output_file, overwrite = TRUE)
+cat("Monte Carlo δ2H precipitation residuals simulation finished. Results saved to:", output_file, "\n")
