@@ -1,0 +1,279 @@
+# ==============================================================================
+# Comparison of FI.M6 with Other Paleoclimate Records (Non-Detrended)
+# ==============================================================================
+# Purpose:
+# This script compares FI.M6 with other records (Bayesian, FLMC, Sine.Squared, RA, Pollen) using correlation analysis, including raw correlations, cross-correlations, running correlations, and visualizations. It interpolates, smooths, and resamples data for fair comparison.
+#
+# Data Requirements:
+# - Excel file with columns:
+#   - BP_d2H_FI_M6, d2H_FI_M6: For FI.M6 reference.
+#   - Per record: BP_[method], [value_col] (e.g., BP_bayesian, d2H__bayesian_MAP).
+# - Data should cover calibrated ages (ka BP) and δ2H values.
+#
+# Caveats and Assumptions:
+# - Assumes linear interpolation and LOESS smoothing (span=0.2) are appropriate; adjust span for different resolutions.
+# - Even-grid resampling (200 points) standardizes spacing but may introduce minor artifacts in sparse data.
+# - AR(1) autocorrelation adjustment is basic; consider advanced methods for higher-order effects.
+# - Colors and legends are predefined; customize as needed.
+# - Site-specific (e.g., Rotsee); validate for other datasets.
+# - For details on methods and validation, see the accompanying manuscript (under review; contact [your email] for preprint).
+#
+# Usage:
+# 1. Set input_file below.
+# 2. Run the script; outputs TXT summary and plot files.
+# 3. Optionally print plots or modify records_list for custom records.
+#
+# Dependencies: Install via install.packages(c("readxl", "dplyr", "stats", "zoo", "ggplot2", "ggtext", "patchwork", "scales"))
+# ==============================================================================
+
+# Load required libraries
+library(readxl)
+library(dplyr)
+library(stats)
+library(zoo)
+library(ggplot2)
+library(ggtext)
+library(patchwork)
+library(scales)
+
+# ---- User-Configurable Input ----
+input_file <- "your_input_data.xlsx"  # Replace with your Excel file path (e.g., "251027_Inputs to compare d2H prec of Milandra and ROT21_interpolations.xlsx")
+
+# ---- Load Data ----
+data <- read_excel(input_file)
+
+# ---- Prepare FI.M6 Data ----
+FI <- data %>%
+  select(BP_d2H_FI_M6, d2H_FI_M6) %>%
+  rename(BP = BP_d2H_FI_M6, value = d2H_FI_M6) %>%
+  filter(!is.na(BP) & !is.na(value))
+
+# ---- Define Records ----
+records_list <- list(
+  list("Bayesian", "BP_bayesian", "d2H__bayesian_MAP"),
+  list("FLMC", "BP_FLMC", "Mean_FLMC"),
+  list("Sine.Squared", "BP_Sine.Squared", "Mean_Sine.Squared"),
+  list("RA", "BP_RA", "Mean_RA"),
+  list("Pollen", "BP_pollen", "Mean_pollen")
+)
+
+# ---- Analysis Function ----
+analyze_and_plot <- function(record_name, bp_col, value_col) {
+  record <- data %>%
+    select(all_of(bp_col), all_of(value_col)) %>%
+    rename(BP = all_of(bp_col), value = all_of(value_col)) %>%
+    filter(!is.na(BP) & !is.na(value))
+  if (nrow(record) < 3) return(NULL)
+  
+  # Interpolate FI.M6 onto record ages
+  FI_interp <- approx(x = FI$BP, y = FI$value, xout = record$BP, rule = 2)
+  merged <- data.frame(BP = record$BP,
+                       FI_M6_interp = FI_interp$y,
+                       Record = record$value) %>%
+    filter(!is.na(FI_M6_interp) & !is.na(Record))
+  
+  # Raw correlation
+  raw_cor <- cor(merged$FI_M6_interp, merged$Record, use = "complete.obs")
+  raw_r2 <- raw_cor^2
+  
+  # Smooth the record with LOESS
+  loess_model <- loess(Record ~ BP, data = merged, span = 0.2)
+  merged$Record_smoothed <- predict(loess_model, newdata = data.frame(BP = merged$BP))
+  
+  # Resample to even grid
+  grid_res <- 200
+  min_bp <- max(min(FI$BP, na.rm = TRUE), min(record$BP, na.rm = TRUE))
+  max_bp <- min(max(FI$BP, na.rm = TRUE), max(record$BP, na.rm = TRUE))
+  even_grid <- seq(min_bp, max_bp, length.out = grid_res)
+  
+  FI_interp_grid <- approx(x = merged$BP, y = merged$FI_M6_interp, xout = even_grid, method = "linear", rule = 2)$y
+  record_interp_grid <- approx(x = merged$BP, y = merged$Record_smoothed, xout = even_grid, method = "linear", rule = 2)$y
+  
+  merged_grid <- data.frame(BP = even_grid,
+                            FI_M6_interp = FI_interp_grid,
+                            Record = record_interp_grid) %>%
+    filter(!is.na(FI_M6_interp) & !is.na(Record))
+  
+  # Autocorrelation-adjusted p-value
+  cor_test <- cor.test(merged_grid$FI_M6_interp, merged_grid$Record)
+  raw_p_naive <- cor_test$p.value
+  acf_FI <- acf(merged_grid$FI_M6_interp, plot = FALSE, lag.max = 1)$acf[2]
+  acf_record <- acf(merged_grid$Record, plot = FALSE, lag.max = 1)$acf[2]
+  n_eff <- nrow(merged_grid) * (1 - acf_FI * acf_record) / (1 + acf_FI * acf_record)
+  raw_p_adj <- raw_p_naive * (nrow(merged_grid) / n_eff)
+  if (raw_p_adj > 1) raw_p_adj <- 1
+  
+  # Cross-correlation
+  ccf_result <- ccf(merged_grid$FI_M6_interp, merged_grid$Record, plot = FALSE, na.action = na.pass)
+  max_lag <- ccf_result$lag[which.max(abs(ccf_result$acf))]
+  max_ccf <- max(abs(ccf_result$acf))
+  
+  # Running correlation
+  window_size <- min(round(grid_res * 0.15), nrow(merged_grid))
+  if (window_size %% 2 == 0) window_size <- window_size + 1
+  run_cor <- rollapply(
+    data = merged_grid %>% select(FI_M6_interp, Record),
+    width = window_size,
+    FUN = function(x) cor(x[, "FI_M6_interp"], x[, "Record"], use = "complete.obs"),
+    by.column = FALSE,
+    align = "center",
+    fill = NA
+  )
+  merged_grid$run_cor <- run_cor
+  
+  # Legends and colors
+  legend_FI <- "FI.M6 (scaled)"
+  legend_record <- paste0(record_name, " (scaled)")
+  color_pal <- c("FI.M6 (scaled)" = "#0072B2",
+                 "RA (scaled)" = "#009E73",
+                 "Sine.Squared (scaled)" = "#E69F00",
+                 "FLMC (scaled)" = "#56B4E9",
+                 "Pollen (scaled)" = "#D55E00",
+                 "Bayesian (scaled)" = "#CC79A7")
+  record_color <- color_pal[legend_record]
+  if (is.na(record_color)) record_color <- "#009E73"
+  
+  # Plot 1: Time-series
+  p1 <- ggplot(merged_grid, aes(x = BP)) +
+    geom_line(aes(y = scale(FI_M6_interp), color = legend_FI), linewidth = 1.2, alpha = 0.9) +
+    geom_line(aes(y = scale(Record), color = legend_record), linewidth = 1.2, alpha = 0.9) +
+    scale_color_manual(values = c(legend_FI = color_pal["FI.M6 (scaled)"],
+                                  setNames(record_color, legend_record))) +
+    scale_x_continuous(breaks = pretty_breaks(n = 8), labels = scales::comma) +
+    labs(
+      title = paste("Time Series Comparison:", record_name, "vs FI.M6"),
+      subtitle = paste("Raw r =", round(raw_cor, 2),
+                       "| R² =", round(raw_r2, 2),
+                       "| p_adj =", format(raw_p_adj, scientific = FALSE, digits = 2),
+                       "| Max CCF =", round(max_ccf, 2),
+                       "at lag", max_lag),
+      x = "Age (cal. ka BP)",
+      y = "Scaled δ2H<sub>prc</sub> (‰, VSMOW)",
+      color = NULL
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 12, color = "gray40"),
+      axis.title = element_text(face = "bold"),
+      axis.text = element_text(size = 12),
+      legend.position = "top",
+      legend.title = element_blank(),
+      legend.text = element_text(size = 12),
+      panel.grid.major = element_line(color = "gray90", linewidth = 0.5),
+      panel.grid.minor = element_blank(),
+      axis.title.y = element_markdown()
+    )
+  
+  # Plot 2: Running correlation
+  p2 <- ggplot(merged_grid, aes(x = BP, y = run_cor)) +
+    geom_smooth(method = "loess", span = 0.3, se = FALSE,
+                color = "gray50", linewidth = 0.8, linetype = "dashed") +
+    geom_line(color = "#D55E00", linewidth = 1.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
+    geom_hline(yintercept = c(-0.5, 0.5), linetype = "dotted", color = "gray50") +
+    scale_x_continuous(breaks = pretty_breaks(n = 8), labels = scales::comma) +
+    scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.25)) +
+    labs(
+      title = paste("Running Correlation (Window:", window_size, "points)"),
+      subtitle = paste("Mean r =", round(mean(merged_grid$run_cor, na.rm = TRUE), 2)),
+      x = "Age (cal. ka BP)",
+      y = "Pearson Correlation Coefficient (r)"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 12, color = "gray40"),
+      axis.title = element_text(face = "bold"),
+      axis.text = element_text(size = 12),
+      panel.grid.major = element_line(color = "gray90", linewidth = 0.5),
+      panel.grid.minor = element_blank()
+    )
+  
+  # Combine plots
+  combined_plot <- p1 / p2 +
+    plot_layout(heights = c(2, 1)) +
+    plot_annotation(
+      title = paste("Analysis of", record_name, "vs FI.M6"),
+      theme = theme(plot.title = element_text(size = 18, face = "bold", hjust = 0.5))
+    )
+  
+  # Save plots
+  pdf_filename <- paste0(record_name, "_vs_FI_M6_combined.pdf")
+  ggsave(pdf_filename, combined_plot, width = 10, height = 8, dpi = 600, device = "pdf")
+  png_filename <- paste0(record_name, "_vs_FI_M6_combined.png")
+  ggsave(png_filename, combined_plot, width = 10, height = 8, dpi = 600)
+  
+  # Return results
+  list(
+    record = record_name,
+    raw_cor = raw_cor,
+    raw_r2 = raw_r2,
+    raw_p_adj = raw_p_adj,
+    max_ccf = max_ccf,
+    lag_at_max = max_lag,
+    mean_run_cor = mean(merged_grid$run_cor, na.rm = TRUE),
+    plots = list(p1 = p1, p2 = p2, combined = combined_plot),
+    min_bp = min_bp,
+    max_bp = max_bp,
+    grid_res = grid_res
+  )
+}
+
+# ---- Run for All Records ----
+results <- lapply(records_list, function(r) {
+  analyze_and_plot(record_name = r[[1]], bp_col = r[[2]], value_col = r[[3]])
+})
+
+# ---- Save Summary Statistics ----
+sink("correlation_summary.txt")
+cat("============================================================\n")
+cat("Correlation Analysis: FI.M6 vs Other Records\n")
+cat("============================================================\n\n")
+for (res in results) {
+  if (is.null(res)) next
+  cat("Record:", res$record, "\n")
+  cat(" Raw Pearson r:", round(res$raw_cor, 3), "\n")
+  cat(" R² (raw):", round(res$raw_r2, 3), "\n")
+  cat(" Adjusted p-value (AR1):", format(res$raw_p_adj, scientific = FALSE, digits = 3), "\n")
+  cat(" Max cross-correlation (CCF):", round(res$max_ccf, 3), "\n")
+  cat(" Lag at max correlation:", res$lag_at_max, "\n")
+  cat(" Mean running correlation:", round(res$mean_run_cor, 3), "\n")
+  cat("------------------------------------------------------------\n")
+}
+cat("All NA values handled by pairwise removal. Even-grid resampling (200 pts) applied.\n")
+cat("Autocorrelation adjusted via effective df (AR1).\n")
+cat("============================================================\n")
+sink()
+
+# ---- Optional: Print Combined Plots ----
+# for (res in results) {
+#   if (!is.null(res)) {
+#     print(res$plots$combined)
+#   }
+# }
+
+# ---- Post-Processing: Convert CCF max_lag to Years ----
+for (i in seq_along(results)) {
+  res <- results[[i]]
+  if (is.null(res)) next
+  step_size_ka <- (res$max_bp - res$min_bp) / (res$grid_res - 1)
+  step_size_years <- step_size_ka * 1000
+  lag_years <- round(res$lag_at_max * step_size_years, -1)
+  results[[i]]$step_size_years <- step_size_years
+  results[[i]]$lag_years <- lag_years
+}
+
+# Append lag conversions to summary
+sink("correlation_summary.txt", append = TRUE)
+cat("\nAdditional: Lag Conversions\n")
+for (res in results) {
+  if (is.null(res)) next
+  cat("Record:", res$record, "\n")
+  cat(" Grid step size (years):", round(res$step_size_years, 0), "\n")
+  cat(" Max CCF lag (years):", res$lag_years, "\n")  # Positive: Record lags FI; Negative: Record leads FI
+  cat("------------------------------------------------------------\n")
+}
+sink()
+
+# Note: To include lag_years in plot subtitles, uncomment and add in p1 labs: paste(..., "at lag", max_lag, "(~", lag_years, "years)")
