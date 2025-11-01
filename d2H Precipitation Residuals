@@ -52,7 +52,8 @@ library(dplyr)
 library(openxlsx)
 
 # ---- User-Configurable Paths and Files ----
-input_file <- "your_input_data.xlsx"  # Replace with your Excel file path (e.g., "data.xlsx")
+setwd("C:/") #Set your directory
+input_file <- "250830_Input_MonteCarloSimulations_Offset_d2Hprc_veg.corr_ice.corr_Temp.xlsx"  # Replace with your Excel file path (e.g., "data.xlsx")
 input_sheet <- "Sheet1"               # Sheet name in Excel
 output_file <- "MonteCarlo_d2H_prc_Residuals.xlsx"  # Output Excel file
 
