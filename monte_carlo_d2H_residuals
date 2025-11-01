@@ -25,7 +25,7 @@
 # - High n_iter (10k) ensures precise quantiles but increases runtime for large datasets.
 # - Assumes symmetric CI from normal dist for SD derivation; if asymmetric, use alternatives (e.g., bootstraps).
 # - No handling of correlated uncertainties (e.g., between temp and δ2H); use multivariate normals if needed.
-# - Site-specific parameters (e.g., for Rotsee); validate/update based on literature/site. See chapter 2.3.6 of the manuscript for details.
+# - Site-specific parameters (e.g., for Rotsee); validate/update based on literature/site. See chapter 2.3.5 of the manuscript for details.
 # - Overwrites output file; use version control or backups.
 #
 # Please check chapter 2.3.6 in the accompanying manuscript (under review) for in-depth discussion of these values and their site-specific application.
