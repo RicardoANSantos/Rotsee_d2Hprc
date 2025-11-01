@@ -2,7 +2,7 @@
 
 - **monte_carlo_d2Hprc.R**: Performs Monte Carlo simulations for vegetation-corrected δ2Hprc reconstruction using an n-alkane relative abundance (R.A) index and hydrogen fractionation factors. Computes 68% and 95% confidence intervals, generates LOESS-smoothed plots.
 - **monte_carlo_d2H_residuals.R**: Performs Monte Carlo simulations to compute δ2Hprc residuals after temperature and ice volume/sea level corrections. Builds on outputs from `monte_carlo_d2Hprc.R`.
-- **compare_records.R**: Compares FI.M6 with other records using correlation metrics (raw, cross-, running), with interpolation, smoothing, and even-grid resampling (non-detrended version).
+- **compare_records_non-detrendeds.R**: Compares FI.M6 with other records using correlation metrics (raw, cross-, running), with interpolation, smoothing, and even-grid resampling (non-detrended version).
 - **compare_records_detrended.R**: Similar to `compare_records.R` but with linear detrending to focus on variability.
 - **ROT21_Inputs_MonteCarlo_simulation_d2Hprc.xlsx**: Input for reconstruction/residuals scripts (Age_BP_ka, d2H_C29, f_GR estimators on different sheets).
 - **251027_Inputs to compare d2H prec of Milandra and ROT21_interpolations.xlsx**: Input for comparison scripts (BP and value columns for FI.M6 and other records).
