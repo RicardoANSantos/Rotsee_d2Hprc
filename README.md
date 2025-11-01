@@ -1,7 +1,7 @@
 ## Scripts and Files
 
-- **monte_carlo_d2Hprc.R**: Performs Monte Carlo simulations for vegetation-corrected δ²Hprc reconstruction using an n-alkane relative abundance (R.A) index and hydrogen fractionation factors. Computes 68% and 95% confidence intervals, generates LOESS-smoothed plots.
-- **monte_carlo_d2H_residuals.R**: Performs Monte Carlo simulations to compute δ²Hprc residuals after temperature and ice volume/sea level corrections. Builds on outputs from `monte_carlo_d2Hprc.R`.
+- **monte_carlo_d2Hprc.R**: Performs Monte Carlo simulations for vegetation-corrected δ2Hprc reconstruction using an n-alkane relative abundance (R.A) index and hydrogen fractionation factors. Computes 68% and 95% confidence intervals, generates LOESS-smoothed plots.
+- **monte_carlo_d2H_residuals.R**: Performs Monte Carlo simulations to compute δ2Hprc residuals after temperature and ice volume/sea level corrections. Builds on outputs from `monte_carlo_d2Hprc.R`.
 - **compare_records.R**: Compares FI.M6 with other records using correlation metrics (raw, cross-, running), with interpolation, smoothing, and even-grid resampling (non-detrended version).
 - **compare_records_detrended.R**: Similar to `compare_records.R` but with linear detrending to focus on variability.
 - **ROT21_Inputs_MonteCarlo_simulation_d2Hprc.xlsx**: Input for reconstruction/residuals scripts (Age_BP_ka, d2H_C29, f_GR estimators on different sheets).
@@ -11,8 +11,8 @@
 
 ### From `monte_carlo_d2Hprc.R`:
 - `d2H_precipitation_simulations.csv`: Raw Monte Carlo simulation results.
-- `d2H_prec_reconstructions_with_CI.xlsx`: Summarized results with mean δ²Hprc, confidence intervals, and LOESS values.
-- `d2H_precip_plot_with_CI_and_LOESS.png/pdf`: Plot of δ²Hprc with CIs and LOESS smoothing.
+- `d2H_prec_reconstructions_with_CI.xlsx`: Summarized results with mean δ2Hprc, confidence intervals, and LOESS values.
+- `d2H_precip_plot_with_CI_and_LOESS.png/pdf`: Plot of δ2Hprc with CIs and LOESS smoothing.
 
 ### From `monte_carlo_d2H_residuals.R`:
 - `MonteCarlo_d2H_prc_Residuals.xlsx`: Summarized residuals with means, SDs, and quantiles for 68%/95% CIs.
