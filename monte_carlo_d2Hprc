@@ -1,12 +1,3 @@
-# Monte Carlo Simulation for δ²H Precipitation Reconstruction
-# Purpose: Reconstruct δ²H precipitation (δ²Hprc) from plant wax δ²H (n-C29 alkane)
-#          using vegetation-corrected fractionation (R.A index) for the Rotsee sediment
-#          core, as described in Santos et al. (2025, GRL submission).
-# Author: R. N. Santos
-# Created: 2025-09-10
-# Last Modified: 2025-09-19
-# Dependencies: R (>= 4.4.1), ggplot2, readxl, writexl, dplyr, tidyr
-
 # Load required libraries
 library(ggplot2)
 library(readxl)
