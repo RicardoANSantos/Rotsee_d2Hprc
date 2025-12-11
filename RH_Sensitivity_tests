@@ -17,43 +17,32 @@
 #     - Coniferous forest: 200 ± 50 mm
 #
 #   OUTPUT:
-#     - Faceted 2 × 3 plot:
-#         columns = drivers (RH-only, Temperature-only, RH–T covary)
-#         rows    = climate regimes (RH↑,T↑ vs RH↑,T↓)
+#     - Side-by-side plots (one per driver) with rows for climate regimes
 #     - Colour encodes temperature used for each simulation point.
 #
 # ======================================================================
-
-# ---- Packages ---------------------------------------------------------
+#
 library(ggplot2)
 library(dplyr)
 library(tidyr)
-
+library(patchwork)
 # ---- Output directory -------------------------------------------------
 # Set this to the folder where you want the figure saved
 output_dir <- "."
-
 # ---- User inputs (Rotsee-like modern state) ---------------------------
-Elevation_m          <- 419 #Rotsee elevation (m)
-
-Rel_hum_mean         <- 76.1 #Rotsee modern mean Relative Humidity (m)
+Elevation_m          <- 419  #Rotsee elevation
+Rel_hum_mean         <- 76.1 #mean RH at Rotsee
 Rel_hum_sd           <- 5
-
 Air_temp_mean        <- 11
 Air_temp_sd          <- 2
-
 Sto_cond_mean        <- 0.2
 Sto_cond_sd          <- 0.1
-
 Bound_layer_res_mean <- 1
 Bound_layer_res_sd   <- 0.1
-
 d2H_XW_mean          <- -68
 d2H_XW_sd            <- 10
-
 n_iter               <- 10000
 set.seed(123)
-
 # ======================================================================
 # FORWARD MODEL: Δ²H_LW (Craig–Gordon + Péclet)
 # ======================================================================
@@ -61,81 +50,80 @@ calc_Delta2H_LW_scalar <- function(RH, Tair,
                                    Sto_cond, Bound_layer_res,
                                    Path_length, d2H_XW,
                                    Elevation_m = 419) {
-
+  
   # Sanity bounds
   Sto_cond        <- max(Sto_cond,        1e-6)
   Bound_layer_res <- max(Bound_layer_res, 1e-6)
   Path_length     <- max(Path_length,     1e-6)
-
+  
   # Atmospheric pressure (hPa)
   Atm_Pressure <- 1013 * exp(-Elevation_m / 7990)
-
+  
   # Saturation vapour pressure (hPa)
   Sat_vp_air <- (1.0007 + 3.46 * Atm_Pressure / 1e6) *
     (6.1121 * exp(17.502 * Tair / (240.97 + Tair)))
-
+  
   # Actual vapour pressure (hPa)
   Actual_vp_air <- (RH / 100) * Sat_vp_air
-
+  
   # Leaf temperature (°C)
   Tleaf <- Tair
-
+  
   # Resistances
   Sto_res <- 1 / Sto_cond
-
+  
   # Leaf internal vapour pressure (hPa)
   Leaf_int_vp <- 6.13753 * exp(
     Tleaf * ((18.564 - (Tleaf / 254.4)) / (Tleaf + 255.57))
   )
-
+  
   ea_ei <- Actual_vp_air / Leaf_int_vp
-
+  
   # ε_kappa (‰)
   eps_kappa <- (25 * Sto_res + 17 * Bound_layer_res) /
     (Sto_res + Bound_layer_res)
-
+  
   # ε+ (‰)
   eps_plus <- (exp((24.844 * 1000 / (273.16 + Tair)^2) -
                      (76.248 / (273.16 + Tair)) +
                      0.052612) - 1) * 1000
-
+  
   # Transpiration rate (m² s/mol)
   Trans <- (((Leaf_int_vp / 10) - (Actual_vp_air / 10)) / 100) *
     ((1 / (Bound_layer_res + Sto_res)) * 1000)
-
+  
   # Diffusivity in water (m²/s)
   Diffusivity_water <- 1e-8 * exp(
     -0.7 + 1729 / (Tleaf + 273) - 586977 / ((Tleaf + 273)^2)
   )
-
+  
   # Water concentration (mol/m³)
   Water_conc <- 5.5555e4
-
+  
   # Péclet number
   Peclet <- ((Path_length / 1000) * (Trans / 1000)) /
     (Water_conc * Diffusivity_water)
-
+  
   # δ²H of water vapour (‰)
   d2H_WV <- (((d2H_XW / 1000 + 1) / (eps_plus / 1000 + 1)) - 1) * 1000
-
+  
   # Δ²H of water vapour (‰)
   Delta2H_WV <- d2H_WV - d2H_XW
-
+  
   # No-Péclet leaf-water enrichment, Δ²He (‰)
   Delta2He <- ((1 + eps_plus / 1000) *
                  ((1 + eps_kappa / 1000) * (1 - ea_ei) +
                     ea_ei * (1 + Delta2H_WV / 1000)) - 1) * 1000
-
+  
   # Apply Péclet correction
   if (is.na(Peclet) || Peclet <= 1e-9) {
     Delta2H_LW <- Delta2He
   } else {
     Delta2H_LW <- (Delta2He * (1 - exp(-Peclet))) / Peclet
   }
-
+  
   Delta2H_LW
 }
-
 # ======================================================================
 # MONTE CARLO SIMULATOR FOR A SINGLE SCENARIO
 # ======================================================================
@@ -144,12 +132,12 @@ simulate_scenario <- function(RH_fixed = NULL,
                               driver   = c("RH", "Temperature", "Covary"),
                               path_mean, path_sd,
                               n_iter   = 10000) {
-
+  
   driver      <- match.arg(driver)
   Delta_vals  <- numeric(n_iter)
-
+  
   for (i in seq_len(n_iter)) {
-
+    
     # Define RH and T for this iteration
     if (driver == "RH") {
       RH   <- RH_fixed
@@ -161,13 +149,13 @@ simulate_scenario <- function(RH_fixed = NULL,
       RH   <- RH_fixed
       Tair <- T_fixed
     }
-
+    
     # Draw uncertain parameters
     Sto_cond_i <- rnorm(1, Sto_cond_mean,        Sto_cond_sd)
     Bound_i    <- rnorm(1, Bound_layer_res_mean, Bound_layer_res_sd)
     Path_i     <- rnorm(1, path_mean,            path_sd)
     d2H_XW_i   <- rnorm(1, d2H_XW_mean,          d2H_XW_sd)
-
+    
     Delta_vals[i] <- calc_Delta2H_LW_scalar(
       RH              = RH,
       Tair            = Tair,
@@ -178,7 +166,7 @@ simulate_scenario <- function(RH_fixed = NULL,
       Elevation_m     = Elevation_m
     )
   }
-
+  
   tibble(
     Delta_mean = mean(Delta_vals, na.rm = TRUE),
     Delta_sd   = sd(Delta_vals,   na.rm = TRUE),
@@ -186,30 +174,26 @@ simulate_scenario <- function(RH_fixed = NULL,
     Delta_p95  = quantile(Delta_vals, 0.95, na.rm = TRUE)
   )
 }
-
 # ======================================================================
 # Scenario definitions
 # ======================================================================
 RH_seq <- seq(60, 90, by = 5)   # RH steps
 T_seq  <- seq(10, 16, by = 1)   # T steps
-
 # Covary regimes
 Covary_same <- tibble(   # RH up, T up
   RH = seq(60, 90, length.out = 7),
   T  = seq(10, 16, length.out = 7)
 )
-
 Covary_opposite <- tibble(  # RH up, T down
   RH = seq(60, 90, length.out = 7),
   T  = seq(16, 10, length.out = 7)
 )
-
 # Helper to build scenarios for a given path-length regime & covary table
 build_scenarios_for_regime <- function(path_mean, path_sd,
                                        physiology_label,
                                        climate_regime_label,
                                        covary_df) {
-
+  
   # RH-only
   df_RH <- bind_rows(lapply(RH_seq, function(rh) {
     out <- simulate_scenario(
@@ -220,7 +204,7 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
       path_sd   = path_sd,
       n_iter    = n_iter
     )
-
+    
     out$Driver    <- "RH"
     out$X_value   <- rh
     out$Scenario  <- paste0("RH_", rh)
@@ -228,7 +212,7 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
     out$T_value   <- Air_temp_mean
     out
   }))
-
+  
   # Temperature-only
   df_T <- bind_rows(lapply(T_seq, function(Tv) {
     out <- simulate_scenario(
@@ -239,7 +223,7 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
       path_sd   = path_sd,
       n_iter    = n_iter
     )
-
+    
     out$Driver    <- "Temperature"
     out$X_value   <- Tv
     out$Scenario  <- paste0("T_", Tv)
@@ -247,7 +231,7 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
     out$T_value   <- Tv
     out
   }))
-
+  
   # Covary (x-axis = RH, colour encodes T)
   df_Co <- bind_rows(lapply(seq_len(nrow(covary_df)), function(i) {
     out <- simulate_scenario(
@@ -258,7 +242,7 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
       path_sd   = path_sd,
       n_iter    = n_iter
     )
-
+    
     out$Driver    <- "Covary"
     out$X_value   <- covary_df$RH[i]
     out$Scenario  <- paste0("Co_RH", covary_df$RH[i], "_T", covary_df$T[i])
@@ -266,14 +250,13 @@ build_scenarios_for_regime <- function(path_mean, path_sd,
     out$T_value   <- covary_df$T[i]
     out
   }))
-
+  
   bind_rows(df_RH, df_T, df_Co) |>
     mutate(
       Physiology     = physiology_label,
       Climate_regime = climate_regime_label
     )
 }
-
 # ======================================================================
 # Run simulations for both vegetation types & climate regimes
 # ======================================================================
@@ -285,7 +268,6 @@ res_mixed_same <- build_scenarios_for_regime(
   climate_regime_label = "RH↑, T↑",
   covary_df            = Covary_same
 )
-
 res_conif_same <- build_scenarios_for_regime(
   path_mean            = 200,
   path_sd              = 50,
@@ -293,7 +275,6 @@ res_conif_same <- build_scenarios_for_regime(
   climate_regime_label = "RH↑, T↑",
   covary_df            = Covary_same
 )
-
 # Regime 2: RH ↑, T ↓
 res_mixed_opp <- build_scenarios_for_regime(
   path_mean            = 100,
@@ -302,7 +283,6 @@ res_mixed_opp <- build_scenarios_for_regime(
   climate_regime_label = "RH↑, T↓",
   covary_df            = Covary_opposite
 )
-
 res_conif_opp <- build_scenarios_for_regime(
   path_mean            = 200,
   path_sd              = 50,
@@ -310,13 +290,11 @@ res_conif_opp <- build_scenarios_for_regime(
   climate_regime_label = "RH↑, T↓",
   covary_df            = Covary_opposite
 )
-
 # Combine all simulations
 all_res <- bind_rows(
   res_mixed_same, res_conif_same,
   res_mixed_opp,  res_conif_opp
 )
-
 # Factor ordering
 all_res$Driver <- factor(all_res$Driver,
                          levels = c("RH", "Temperature", "Covary"))
@@ -329,18 +307,27 @@ all_res$Physiology <- factor(
     "Coniferous forest (200 ± 50 mm)"
   )
 )
-
 # ======================================================================
-# Plotting – 2 × 3 facet grid
+# Plotting – Combined plots using patchwork
+#   - Each driver as a separate plot with its own x-axis title
+#   - Faceted vertically by climate regime
 #   - Colour = temperature used for each point
-#   - x label is panel-specific (encoded in facet strip)
 # ======================================================================
 ylim_min <- 0
 ylim_max <- 55
 pd       <- position_dodge(width = 0.4)
 
-p_sensitivity <- ggplot(
-  all_res,
+# Base theme
+base_theme <- theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.placement = "outside"
+  )
+
+# RH-only plot
+p_rh <- ggplot(
+  filter(all_res, Driver == "RH"),
   aes(
     x      = X_value,
     y      = Delta_mean,
@@ -358,36 +345,101 @@ p_sensitivity <- ggplot(
   geom_point(size = 2.5, position = pd) +
   geom_line(linewidth = 0.9, position = pd) +
   scale_y_continuous(limits = c(ylim_max, ylim_min)) +
-  scale_colour_gradient(name = "Temperature (°C)") +
-  facet_grid(
-    Climate_regime ~ Driver,
-    scales   = "free_x",
-    labeller = labeller(
-      Driver = c(
-        RH          = "RH-only\n(x = RH %)",
-        Temperature = "Temperature-only\n(x = T °C)",
-        Covary      = "RH–T covary\n(x = RH %)"
-      )
-    )
-  ) +
+  scale_colour_gradient(name = "Temperature (°C)", limits = c(10, 16)) +
+  facet_grid(Climate_regime ~ ., switch = "y") +
   labs(
-    title = "Climate Scenario Effects on Leaf-Water Enrichment (Δ²H_LW)",
-    x     = NULL,
+    title = "RH-only",
+    x     = "RH (%)",
     y     = expression(Delta^2 * "H"[LW] * " (‰)"),
     shape = "Physiology"
   ) +
-  theme_minimal(base_size = 13) +
+  base_theme +
   theme(
-    strip.text  = element_text(face = "bold"),
-    axis.text.x = element_text(angle = 45, hjust = 1)
+    strip.text.y = element_blank()
   )
 
-print(p_sensitivity)
+# Temperature-only plot
+p_temp <- ggplot(
+  filter(all_res, Driver == "Temperature"),
+  aes(
+    x      = X_value,
+    y      = Delta_mean,
+    colour = T_value,
+    group  = Physiology,
+    shape  = Physiology
+  )
+) +
+  geom_errorbar(
+    aes(ymin = Delta_p5, ymax = Delta_p95),
+    position = pd,
+    width    = 0.3,
+    alpha    = 0.8
+  ) +
+  geom_point(size = 2.5, position = pd) +
+  geom_line(linewidth = 0.9, position = pd) +
+  scale_y_continuous(limits = c(ylim_max, ylim_min)) +
+  scale_colour_gradient(name = "Temperature (°C)", limits = c(10, 16)) +
+  facet_grid(Climate_regime ~ ., switch = "y") +
+  labs(
+    title = "Temperature-only",
+    x     = "Temperature (°C)",
+    y     = NULL,
+    shape = "Physiology"
+  ) +
+  base_theme +
+  theme(
+    strip.text.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
 
+# Covary plot
+p_cov <- ggplot(
+  filter(all_res, Driver == "Covary"),
+  aes(
+    x      = X_value,
+    y      = Delta_mean,
+    colour = T_value,
+    group  = Physiology,
+    shape  = Physiology
+  )
+) +
+  geom_errorbar(
+    aes(ymin = Delta_p5, ymax = Delta_p95),
+    position = pd,
+    width    = 0.3,
+    alpha    = 0.8
+  ) +
+  geom_point(size = 2.5, position = pd) +
+  geom_line(linewidth = 0.9, position = pd) +
+  scale_y_continuous(limits = c(ylim_max, ylim_min)) +
+  scale_colour_gradient(name = "Temperature (°C)", limits = c(10, 16)) +
+  facet_grid(Climate_regime ~ ., switch = "y") +
+  labs(
+    title = "RH–T covary",
+    x     = "RH (%)",
+    y     = NULL,
+    shape = "Physiology"
+  ) +
+  base_theme +
+  theme(
+    strip.text.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+# Combine plots
+p_sensitivity <- (p_rh + p_temp + p_cov) +
+  plot_annotation(
+    title = "Climate Scenario Effects on Leaf-Water Enrichment (Δ²H_LW)"
+  ) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "right")
+
+print(p_sensitivity)
 # ---- Save figure ------------------------------------------------------
 ggsave("LeafWater_ClimateScenarios_Mixed_vs_Coniferous.png",
        p_sensitivity, width = 11, height = 6, dpi = 300)
-
 Cairo::CairoPDF("LeafWater_ClimateScenarios_Mixed_vs_Coniferous.pdf",
                 width = 11, height = 6)
 print(p_sensitivity)
