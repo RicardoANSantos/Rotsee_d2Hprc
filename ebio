@@ -35,7 +35,6 @@
 #        - PFT_summary_WOODY_ONLY.txt
 #        - plant_type_summary_WOODY_ONLY.txt   (Woody Plants only)
 #
-# Author: Ricardo N. Santos
 # ==============================================================================
 
 setwd("********") # Change ******** with your directory 
