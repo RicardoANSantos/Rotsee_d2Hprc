@@ -1,0 +1,332 @@
+# ==============================================================================
+# BIOSYNTHETIC FRACTIONATION (ε_bio) – n-C29 vs MODELLED LEAF WATER
+# Modern European plants – ROT21 ebio analysis (WOODY PFTs ONLY)
+# ==============================================================================
+#
+# This script:
+#   1. Reads the Excel file:
+#        "ROT21_Inputs_ebio.xlsx"
+#      using the FIRST worksheet.
+#
+#   2. Assumes that this sheet already contains:
+#        - sample_id        : sample identifier
+#        - d2H_nC29         : δ2H of n-C29 (‰ VSMOW)
+#        - d2H_nC29_sd      : analytical 1σ of δ2H n-C29 (‰); if NA or ≤0, set to 2‰
+#        - d2H_LW_mean      : mean modelled leaf water δ2H (‰)
+#        - d2H_LW_p16/p84   : 16th and 84th percentiles of leaf water δ2H
+#        - d2H_LW_p5/p95    : 5th and 95th percentiles of leaf water δ2H
+#        - d2H_prc          : δ2H of precipitation (‰) at the site
+#        - PFT              : Plant Functional Type
+#        - plant_type       : "WP" (woody plants) or "GR" (grasses & herbs)
+#
+#   3. This analysis EXPLICITLY RESTRICTS to WOODY PFTs:
+#        - TC, SE, SC, TD, SD
+#      All herbaceous codes (e.g. HM, HD) are excluded and do not enter ε_bio.
+#
+#   4. Calculates (for woody plants only):
+#        - ε_bio (biosynthetic fractionation) = n-C29 vs leaf water
+#        - ε_app (apparent fractionation)     = n-C29 vs precipitation (for reference)
+#        - 68% and 90% confidence intervals for ε_bio from the leaf-water model
+#        - A combined 68% sd (model + analytical)
+#
+#   5. Generates:
+#        - Biosynthetic_fractionation_nC29_FULL_RESULTS_WOODY_ONLY.csv
+#        - Biosynthetic_fractionation_nC29_by_PFT_WOODY_ONLY.png
+#        - PFT_summary_WOODY_ONLY.txt
+#        - plant_type_summary_WOODY_ONLY.txt   (Woody Plants only)
+#
+# Author: Ricardo N. Santos
+# ==============================================================================
+
+setwd("********") # Change ******** with your directory 
+
+# -----------------------
+# LOAD PACKAGES
+# -----------------------
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(readxl)
+})
+
+# -----------------------
+# USER SETTINGS
+# -----------------------
+
+# Input Excel file (adjust path if needed)
+input_file  <- "ROT21_Inputs_ebio.xlsx"
+
+# Use sheet index = 1 (first tab in the workbook)
+input_sheet <- 1
+
+# PFTs to KEEP (woody plants only)
+woody_PFTs <- c("TC", "SE", "SC", "TD", "SD")
+
+# -----------------------
+# LOAD DATA
+# -----------------------
+
+cat("Reading Excel file:\n  ", input_file, "\nfrom sheet index:\n  ", input_sheet, "\n\n")
+
+data_raw <- read_excel(input_file, sheet = input_sheet)
+
+# Make sure we have the expected columns:
+required_cols <- c(
+  "sample_id",
+  "d2H_nC29",
+  "d2H_nC29_sd",
+  "d2H_LW_mean",
+  "d2H_LW_p16",
+  "d2H_LW_p84",
+  "d2H_LW_p5",
+  "d2H_LW_p95",
+  "d2H_prc",
+  "PFT",
+  "plant_type"
+)
+
+missing_cols <- setdiff(required_cols, names(data_raw))
+if (length(missing_cols) > 0) {
+  stop(
+    "The following required columns are missing from sheet 1 of the Excel file:\n",
+    paste(" -", missing_cols, collapse = "\n"),
+    "\n\nPlease check column names in the Excel file and update the script accordingly."
+  )
+}
+
+data <- data_raw %>%
+  mutate(
+    sample_id  = as.character(sample_id),
+    PFT        = as.character(PFT),
+    plant_type = as.character(plant_type)
+  )
+
+cat("Data loaded successfully. Number of rows:", nrow(data), "\n")
+cat("Woody PFTs retained in this analysis:", paste(woody_PFTs, collapse = ", "), "\n\n")
+
+# ------------------------------------------------------------------------------
+# CALCULATE BIOSYNTHETIC FRACTIONATION (ε_bio) AND APPARENT FRACTIONATION (ε_app)
+# ------------------------------------------------------------------------------
+
+cat("Calculating ε_bio (n-C29 vs modelled leaf water) and ε_app (n-C29 vs precipitation) for WOODY PFTs only...\n\n")
+
+frac <- data %>%
+  # keep only rows with n-C29, valid PFT, and PFT in woody_PFTs
+  filter(
+    !is.na(d2H_nC29),
+    !is.na(PFT),
+    PFT %in% woody_PFTs
+  ) %>%
+  mutate(
+    # Ensure numeric types
+    d2H_nC29    = as.numeric(d2H_nC29),
+    d2H_nC29_sd = as.numeric(d2H_nC29_sd),
+    d2H_LW_mean = as.numeric(d2H_LW_mean),
+    d2H_LW_p16  = as.numeric(d2H_LW_p16),
+    d2H_LW_p84  = as.numeric(d2H_LW_p84),
+    d2H_LW_p5   = as.numeric(d2H_LW_p5),
+    d2H_LW_p95  = as.numeric(d2H_LW_p95),
+    d2H_prc     = as.numeric(d2H_prc)
+  ) %>%
+  # BIOSYNTHETIC FRACTIONATION: ε_bio (wax vs leaf water)
+  mutate(
+    eps_bio = ((d2H_nC29 / 1000 + 1) / (d2H_LW_mean / 1000 + 1) - 1) * 1000,
+    
+    # 68% CI (leaf-water modelling uncertainty only)
+    eps_bio_68_low  = ((d2H_nC29 / 1000 + 1) / (d2H_LW_p84 / 1000 + 1) - 1) * 1000,  # more negative
+    eps_bio_68_high = ((d2H_nC29 / 1000 + 1) / (d2H_LW_p16 / 1000 + 1) - 1) * 1000,  # less negative
+    
+    # 90% CI (leaf-water modelling only)
+    eps_bio_90_low  = ((d2H_nC29 / 1000 + 1) / (d2H_LW_p95 / 1000 + 1) - 1) * 1000,
+    eps_bio_90_high = ((d2H_nC29 / 1000 + 1) / (d2H_LW_p5  / 1000 + 1) - 1) * 1000,
+    
+    # APPARENT FRACTIONATION: ε_app (wax vs precipitation)
+    eps_app = ((d2H_nC29 / 1000 + 1) / (d2H_prc / 1000 + 1) - 1) * 1000,
+    
+    # Analytical sd of n-C29 (fallback to 2‰ if missing or non-positive)
+    d2H_nC29_sd = ifelse(is.na(d2H_nC29_sd) | d2H_nC29_sd <= 0, 2, d2H_nC29_sd),
+    
+    # Total 68% uncertainty for ε_bio (model + analytical)
+    eps_bio_total_sd = sqrt(
+      ((eps_bio_68_high - eps_bio_68_low) / 2)^2 + d2H_nC29_sd^2
+    )
+  )
+
+cat("Fractionation calculation done. Number of valid woody samples:", nrow(frac), "\n\n")
+
+# ------------------------------------------------------------------------------
+# SUMMARY BY PFT (ε_bio, WOODY ONLY)
+# ------------------------------------------------------------------------------
+
+cat("Summarising ε_bio by woody Plant Functional Type (PFT)...\n\n")
+
+summary_PFT <- frac %>%
+  group_by(PFT) %>%
+  summarise(
+    n                = n(),
+    eps_bio_mean     = mean(eps_bio,               na.rm = TRUE),
+    eps_bio_sd       = sd(eps_bio,                 na.rm = TRUE),
+    eps_bio_median   = median(eps_bio,             na.rm = TRUE),
+    eps_bio_IQR      = IQR(eps_bio,                na.rm = TRUE),
+    eps_bio_68range  = mean(eps_bio_68_high - eps_bio_68_low, na.rm = TRUE) / 2,
+    .groups = "drop"
+  ) %>%
+  arrange(eps_bio_mean)
+
+print(summary_PFT)
+
+# ------------------------------------------------------------------------------
+# SAVE FULL RESULTS (WOODY ONLY)
+# ------------------------------------------------------------------------------
+
+output_full_csv <- "Biosynthetic_fractionation_nC29_FULL_RESULTS_WOODY_ONLY.csv"
+write.csv(frac, output_full_csv, row.names = FALSE)
+cat("\nFull per-sample results (woody PFTs only) saved →", output_full_csv, "\n\n")
+
+# ------------------------------------------------------------------------------
+# PLOT: ε_bio vs PFT (WOODY ONLY)
+# ------------------------------------------------------------------------------
+
+cat("Creating PFT-level ε_bio figure (woody PFTs only)...\n\n")
+
+p_pft <- ggplot(frac, aes(x = reorder(PFT, eps_bio, median), y = eps_bio)) +
+  geom_hline(yintercept = c(-100, -120, -140, -160), 
+             linetype = "dashed", colour = "grey60") +
+  
+  # Thick bars = 68% CI
+  geom_errorbar(aes(ymin = eps_bio_68_low, ymax = eps_bio_68_high),
+                width = 0.3, linewidth = 1.2, alpha = 0.9, colour = "steelblue") +
+  
+  # Thin bars = 90% CI
+  geom_errorbar(aes(ymin = eps_bio_90_low, ymax = eps_bio_90_high),
+                width = 0.2, linewidth = 0.5, alpha = 0.5, colour = "steelblue") +
+  
+  geom_point(aes(colour = PFT), size = 3, alpha = 0.9) +
+  geom_boxplot(fill = NA, outlier.shape = NA, width = 0.5, colour = "black") +
+  
+  scale_y_continuous(breaks = seq(-300, -50, 20)) +
+  labs(
+    title = expression(paste(epsilon["bio"] ~ "(n-C29 / modelled leaf water) – woody PFTs only")),
+    subtitle = "Thick bars = 68% CI  |  Thin bars = 90% CI  |  Boxplots = distribution per woody PFT",
+    y = expression(epsilon["bio"] ~ "(‰)"),
+    x = "Woody Plant Functional Type",
+    caption = "Biosynthetic fractionation relative to modelled leaf water (TC, SE, SC, TD, SD only)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    axis.text.x     = element_text(angle = 45, hjust = 1)
+  )
+
+output_pft_png <- "Biosynthetic_fractionation_nC29_by_PFT_WOODY_ONLY.png"
+ggsave(output_pft_png, p_pft, width = 11, height = 7, dpi = 300)
+print(p_pft)
+cat("PFT figure saved →", output_pft_png, "\n\n")
+
+# ------------------------------------------------------------------------------
+# TEXT SUMMARY PER PFT → PFT_summary_WOODY_ONLY.txt
+# ------------------------------------------------------------------------------
+
+cat("Creating PFT_summary_WOODY_ONLY.txt...\n\n")
+
+summary_PFT_pretty <- frac %>%
+  group_by(PFT) %>%
+  summarise(
+    n                = n(),
+    eps_bio_mean     = round(mean(eps_bio,               na.rm = TRUE), 1),
+    eps_bio_sd       = round(sd(eps_bio,                 na.rm = TRUE), 1),
+    eps_bio_median   = round(median(eps_bio,             na.rm = TRUE), 1),
+    eps_bio_IQR      = round(IQR(eps_bio,                na.rm = TRUE), 1),
+    eps_bio_68_low   = round(mean(eps_bio_68_low,        na.rm = TRUE), 1),
+    eps_bio_68_high  = round(mean(eps_bio_68_high,       na.rm = TRUE), 1),
+    eps_bio_68_range = round(mean(eps_bio_68_high - eps_bio_68_low, na.rm = TRUE) / 2, 1),
+    .groups = "drop"
+  ) %>%
+  arrange(eps_bio_mean) %>%
+  mutate(
+    `68% CI`          = paste0("[", eps_bio_68_low, " to ", eps_bio_68_high, " ‰]"),
+    `±68% half-width` = paste0("± ", eps_bio_68_range, " ‰")
+  ) %>%
+  select(PFT, n, eps_bio_mean, eps_bio_sd, eps_bio_median, eps_bio_IQR,
+         `68% CI`, `±68% half-width`)
+
+print(summary_PFT_pretty, width = Inf)
+
+output_pft_txt <- "PFT_summary_WOODY_ONLY.txt"
+sink(output_pft_txt)
+cat("================================================================================\n")
+cat("BIOSYNTHETIC FRACTIONATION ε_bio (n-C29 vs modelled leaf water)\n")
+cat("SUMMARY BY WOODY PLANT FUNCTIONAL TYPE (TC, SE, SC, TD, SD)\n")
+cat("================================================================================\n")
+cat("Generated on:", format(Sys.Date(), "%Y-%m-%d"), "\n")
+cat("Monte Carlo leaf-water percentiles assumed in input (p16, p84, p5, p95)\n")
+cat("n-C29 analytical uncertainty: measured sd or 2 ‰ if missing\n\n")
+
+cat(sprintf("%-4s %-4s %-12s %-8s %-12s %-10s %-25s %s\n",
+            "PFT", "n", "mean (‰)", "sd (‰)", "median (‰)", "IQR (‰)",
+            "68% CI (‰)", "±68% half-width"))
+cat("--------------------------------------------------------------------------------\n")
+for (i in 1:nrow(summary_PFT_pretty)) {
+  row <- summary_PFT_pretty[i, ]
+  cat(sprintf("%-4s %-4s %-12s %-8s %-12s %-10s %-25s %s\n",
+              row$PFT,
+              row$n,
+              row$eps_bio_mean,
+              row$eps_bio_sd,
+              row$eps_bio_median,
+              row$eps_bio_IQR,
+              row$`68% CI`,
+              row$`±68% half-width`))
+}
+cat("================================================================================\n")
+sink()
+
+cat("PFT_summary_WOODY_ONLY.txt created →", output_pft_txt, "\n\n")
+
+# ------------------------------------------------------------------------------
+# SUMMARY BY BROAD PLANT TYPE – WOODY ONLY
+# ------------------------------------------------------------------------------
+
+cat("Summarising ε_bio by broad plant type (woody-only subset)...\n\n")
+
+frac <- frac %>%
+  mutate(plant_type = trimws(as.character(plant_type)))
+
+summary_plant_type <- frac %>%
+  filter(plant_type == "WP") %>%  # by construction, these should all be woody
+  group_by(plant_type) %>%
+  summarise(
+    n            = n(),
+    mean_eps_bio = round(mean(eps_bio, na.rm = TRUE), 1),
+    sd_eps_bio   = round(sd(eps_bio,   na.rm = TRUE), 1),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    summary_line = sprintf("Woody Plants (WP: TC, SE, SC, TD, SD) n = %3d   |   mean ε_bio = %6.1f ‰   |   sd = %4.1f ‰",
+                           n, mean_eps_bio, sd_eps_bio)
+  )
+
+print(summary_plant_type)
+
+output_pt_txt <- "plant_type_summary_WOODY_ONLY.txt"
+sink(output_pt_txt)
+cat("====================================================================\n")
+cat("BIOSYNTHETIC FRACTIONATION ε_bio (n-C29 vs modelled leaf water)\n")
+cat("SUMMARY BY BROAD PLANT TYPE (WOODY PFTs ONLY)\n")
+cat("====================================================================\n")
+cat("Generated on:", format(Sys.Date(), "%Y-%m-%d"), "\n\n")
+
+for (i in 1:nrow(summary_plant_type)) {
+  cat(summary_plant_type$summary_line[i], "\n")
+}
+
+cat("\n====================================================================\n")
+cat("This analysis excludes herbaceous PFTs (e.g. HM, HD) and retains only woody PFTs:\n")
+cat("TC, SE, SC, TD, SD\n")
+cat("====================================================================\n")
+sink()
+
+cat("plant_type_summary_WOODY_ONLY.txt created →", output_pt_txt, "\n\n")
+
+cat("All done. Script finished successfully (woody PFTs only).\n")
