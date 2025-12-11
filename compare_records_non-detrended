@@ -37,7 +37,7 @@ library(patchwork)
 library(scales)
 
 # ---- User-Configurable Input ----
-input_file <- "your_input_data.xlsx"  # Replace with your Excel file path (e.g., "251027_Inputs to compare d2H prec of Milandra and ROT21_interpolations.xlsx")
+input_file <- "your_input_data.xlsx"  # Replace with your Excel file path (e.g., "Inputs to compare d2H prec of Milandra and ROT21_interpolations.xlsx")
 
 # ---- Load Data ----
 data <- read_excel(input_file)
