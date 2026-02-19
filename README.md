@@ -89,7 +89,7 @@
 - **Customization**: Adjust parameters (e.g., n_simulations=10000, LOESS span=0.2, grid_res=200) for other datasets.
 
 ## Citation
-Please cite the associated manuscript: Santos, R. N., et al. (2025). Central Europe hydroclimate since the Younger Dryas from vegetation-corrected sedimentary plant wax δ²H values. Paleoceanography and Paleoclimatology (in submission).
+Please cite the associated manuscript: Santos, R. N., et al. (2026). Central Europe hydroclimate since the Younger Dryas from vegetation-corrected sedimentary plant wax δ²H values. Paleoceanography and Paleoclimatology (Accepted).
 
 ## Contact
 For questions, contact R. N. Santos (r.n.santos@unibas.ch) or S. N. Ladd (n.ladd@unibas.ch).
