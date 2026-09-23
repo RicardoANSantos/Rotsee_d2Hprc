@@ -2,7 +2,7 @@
 # Monte Carlo Simulation for δ2H Precipitation Reconstruction
 # ==============================================================================
 # Purpose:
-# This script reconstructs δ2H precipitation (δ2Hprc) from plant wax δ2H (n-C29 alkane) using vegetation-corrected fractionation (n-alkane relative abudances, R.A index) for the Rotsee sediment core, as described in Santos et al. (2025, in submission).
+# This script reconstructs δ2H precipitation (δ2Hprc) from plant wax δ2H (n-C29 alkane) using vegetation-corrected fractionation (n-alkane relative abudances, R.A index) for the Rotsee sediment core, as described in Santos et al. (2026).
 # It performs Monte Carlo simulations, computes confidence intervals, adds LOESS smoothing, and generates plots.
 #
 # Data Requirements:
