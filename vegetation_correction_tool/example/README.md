@@ -1,0 +1,1 @@
+Synthetic example input for run_nalk_vegetation_correction.R
