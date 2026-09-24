@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+title: "n-alkane vegetation correction for d2H of precipitation"
+authors:
+  - family-names: Santos
+    given-names: Ricardo N.
+    affiliation: University of Basel
+license: MIT
+preferred-citation:
+  type: article
+  title: "Central European hydroclimate since the Younger Dryas inferred from vegetation-corrected sedimentary plant wax d2H values"
+  authors:
+    - family-names: Santos
+      given-names: Ricardo N.
+    - family-names: Nelson
+      given-names: D. B.
+    - family-names: Klatt
+      given-names: A.
+    - family-names: Schubert
+      given-names: C. J.
+    - family-names: Dubois
+      given-names: N.
+    - family-names: De Jonge
+      given-names: C.
+    - family-names: Ladd
+      given-names: S. Nemiah
+  journal: "Paleoceanography and Paleoclimatology"
+  volume: 41
+  start: e2025PA005401
+  year: 2026
+  doi: 10.1029/2025PA005401
